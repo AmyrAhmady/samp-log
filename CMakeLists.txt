@@ -90,11 +90,9 @@ add_definitions(-DPAWN_CELL_SIZE=32)
 # Windows-specific configuration
 if(WIN32)
     # Set module definition file for Win32 platform
-    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-        set_target_properties(log-plugin PROPERTIES
+    set_target_properties(log-plugin PROPERTIES
             LINK_FLAGS "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/src/plugin.def"
-        )
-    endif()
+    )
 
     # Set character set to Unicode
     target_compile_definitions(log-plugin PRIVATE UNICODE _UNICODE)
