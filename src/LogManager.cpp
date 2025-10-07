@@ -7,18 +7,7 @@ bool Logger::Log(samplog::LogLevel level, std::string &&msg, AMX *amx)
 	PluginLog::Get()->Log(samplog::LogLevel::DEBUG, "Logger::Log(level={}, msg='{}', amx={})",
 		level, msg, static_cast<const void *>(amx));
 
-	bool ret_val = false;
-	std::vector<samplog::AmxFuncCallInfo> call_info;
-	if (m_DebugInfos && samplog::Api::Get()->GetAmxFunctionCallTrace(amx, call_info))
-	{
-		ret_val = m_Logger->Log(level, msg, call_info);
-	}
-	else
-	{
-		ret_val = m_Logger->Log(level, msg);
-	}
-
-	return ret_val;
+	return m_Logger->Log(level, msg);
 }
 
 

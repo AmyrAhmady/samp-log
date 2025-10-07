@@ -1,34 +1,125 @@
-cmake_minimum_required(VERSION 3.13)
-project(log-plugin VERSION 0.4)
+cmake_minimum_required(VERSION 3.10)
+project(log-plugin LANGUAGES C CXX)
 
-if (NOT LOG_PLUGIN_VERSION) # allow version override
-	set(LOG_PLUGIN_VERSION ${PROJECT_VERSION})
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Target architecture handling
+if(NOT DEFINED TARGET_ARCH OR TARGET_ARCH STREQUAL "")
+    set(TARGET_ARCH "x86")
 endif()
 
-list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/libs/cmake")
-
+# Platform-specific compiler flags
 if(UNIX)
-	# force 32bit compilation and hide non-exported symbols
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -fvisibility=hidden")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32 -fvisibility=hidden")
-	set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS OFF)
+    # Add -m32 flag only for x86 architecture on Unix platforms
+    if(TARGET_ARCH STREQUAL "x86")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
+    endif()
+
+    # Linux-specific flags
+    add_compile_definitions(LINUX)
+    add_compile_options(-w -fshort-wchar)
+    set(CMAKE_C_FLAGS_RELEASE "-O3")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+elseif(WIN32)
+    # Windows-specific definitions
+    add_compile_definitions(WIN32 _WINDOWS _USRDLL LOG_PLUGIN_EXPORTS)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
 endif()
 
+# Include directories
+include_directories(
+    libs/sdk
+    libs/sdk/amx
+    libs/fmt/include
+)
 
-add_subdirectory(libs/fmt)
-mark_as_advanced(FMT_TEST FMT_INSTALL FMT_PEDANTIC FMT_DOC FMT_USE_CPP11 FMT_WERROR)
+# Source files
+set(SOURCES
+    src/main.cpp
+    src/PluginLog.cpp
+    src/PluginLog.hpp
+    src/LogManager.cpp
+    src/LogManager.hpp
+    src/natives.cpp
+    src/natives.hpp
+    src/SampConfigReader.cpp
+    src/SampConfigReader.hpp
+    src/Singleton.hpp
+    src/sdk.hpp
+    src/version.hpp
+    libs/sdk/amxplugin.cpp
+)
 
+# Create shared library
+add_library(log-plugin SHARED ${SOURCES})
 
-find_package(log-core REQUIRED CONFIG)
+add_subdirectory(libs/log-core)
+target_link_libraries(log-plugin log-core)
+target_include_directories(log-plugin PUBLIC ./libs/log-core/include)
 
+# add_subdirectory(libs/fmt)
+target_link_libraries(log-plugin fmt)
 
-set(SUBHOOK_STATIC ON CACHE BOOL "")
-set(SUBHOOK_INSTALL OFF CACHE BOOL "")
-set(SUBHOOK_TESTS OFF CACHE BOOL "")
-set(SUBHOOK_FORCE_32BIT ON CACHE BOOL "")
-set(BUILD_TESTING OFF CACHE BOOL "")
-mark_as_advanced(SUBHOOK_STATIC SUBHOOK_INSTALL SUBHOOK_TESTS SUBHOOK_FORCE_32BIT BUILD_TESTING)
-add_subdirectory(libs/subhook)
+include(CheckIncludeFile)
 
+check_include_file(alloca.h HAVE_ALLOCA_H)
+if(HAVE_ALLOCA_H)
+    add_definitions(-DHAVE_ALLOCA_H)
+endif()
 
-add_subdirectory(src)
+check_include_file(inttypes.h HAVE_INTTYPES_H)
+if(HAVE_INTTYPES_H)
+    add_definitions(-DHAVE_INTTYPES_H)
+endif()
+
+check_include_file(malloc.h HAVE_MALLOC_H)
+if(HAVE_MALLOC_H)
+    add_definitions(-DHAVE_MALLOC_H)
+endif()
+
+check_include_file(stdint.h HAVE_STDINT_H)
+if(HAVE_STDINT_H)
+    add_definitions(-DHAVE_STDINT_H)
+endif()
+
+add_definitions(-DPAWN_CELL_SIZE=32)
+
+# Windows-specific configuration
+if(WIN32)
+    # Set module definition file for Win32 platform
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        set_target_properties(log-plugin PROPERTIES
+            LINK_FLAGS "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/src/plugin.def"
+        )
+    endif()
+
+    # Set character set to Unicode
+    target_compile_definitions(log-plugin PRIVATE UNICODE _UNICODE)
+
+    # MSVC-specific definitions
+    if(MSVC)
+        target_compile_definitions(log-plugin PRIVATE
+            _CRT_SECURE_NO_WARNINGS
+            NOMINMAX
+            _WIN32_WINNT=0x0600
+            _SCL_SECURE_NO_WARNINGS
+						_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS
+        )
+    endif()
+endif()
+
+# Set output name
+if(UNIX)
+    set_target_properties(log-plugin PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "log-plugin"
+        SUFFIX ".so"
+    )
+elseif(WIN32)
+    set_target_properties(log-plugin PROPERTIES
+        OUTPUT_NAME "log-plugin"
+    )
+endif()

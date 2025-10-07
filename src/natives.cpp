@@ -4,14 +4,46 @@
 
 #include <fmt/format.h>
 
+inline int AMXAPI amx_GetCString(AMX* amx, cell param, char*& dest) {
+	cell* ptr;
+	amx_GetAddr(amx, param, &ptr);
+	int len;
+	amx_StrLen(ptr, &len);
+	dest = (char*)malloc((len + 1) * sizeof(char));
+	if (dest != NULL) {
+		amx_GetString(dest, ptr, 0, UNLIMITED);
+		dest[len] = 0;
+		return len;
+	}
+	return 0;
+}
+
+inline void AMXAPI amx_SetCString(AMX* amx, cell param, char* str, int len) {
+	cell* dest;
+	amx_GetAddr(amx, param, &dest);
+	amx_SetString(dest, str, 0, 0, len);
+}
+
+inline std::string AMXAPI amx_GetCppString(AMX* amx, cell param) {
+	char* tmp;
+	amx_StrParamChar(amx, param, tmp);
+	if (tmp != NULL) {
+		return tmp;
+	}
+	return "";
+}
+
+inline void AMXAPI amx_SetCppString(AMX* amx, cell param, std::string str, int len) {
+	cell* dest;
+	amx_GetAddr(amx, param, &dest);
+	amx_SetString(dest, str.c_str(), 0, 0, len);
+}
 
 // native Logger:CreateLog(const name[], bool:debuginfo = true);
 AMX_DECLARE_NATIVE(Native::CreateLog)
 {
-	ScopedDebugInfo dbg_info(amx, "CreateLog", params, "sd");
-
-	const char *name = nullptr;
-	amx_StrParam(amx, params[1], name);
+	char* name = nullptr;
+	amx_StrParamChar(amx, params[1], name);
 
 	if (name == nullptr)
 	{
@@ -27,8 +59,6 @@ AMX_DECLARE_NATIVE(Native::CreateLog)
 // native DestroyLog(Logger:logger);
 AMX_DECLARE_NATIVE(Native::DestroyLog)
 {
-	ScopedDebugInfo dbg_info(amx, "DestroyLog", params, "d");
-
 	const Logger::Id logid = params[1];
 	if (LogManager::Get()->IsValid(logid) == false)
 	{
@@ -44,8 +74,6 @@ AMX_DECLARE_NATIVE(Native::DestroyLog)
 // native bool:IsLogLevel(Logger:logger, E_LOGLEVEL:level);
 AMX_DECLARE_NATIVE(Native::IsLogLevel)
 {
-	ScopedDebugInfo dbg_info(amx, "IsLogLevel", params, "dd");
-
 	const Logger::Id logid = params[1];
 	if (LogManager::Get()->IsValid(logid) == false)
 	{
@@ -62,8 +90,6 @@ AMX_DECLARE_NATIVE(Native::IsLogLevel)
 // native Log(Logger:logger, E_LOGLEVEL:level, const msg[], {Float,_}:...);
 AMX_DECLARE_NATIVE(Native::Log)
 {
-	ScopedDebugInfo dbg_info(amx, "Log", params, "dds");
-
 	const Logger::Id logid = params[1];
 	if (LogManager::Get()->IsValid(logid) == false)
 	{
@@ -71,12 +97,12 @@ AMX_DECLARE_NATIVE(Native::Log)
 		return 0;
 	}
 
-	auto &logger = LogManager::Get()->GetLogger(logid);
+	auto& logger = LogManager::Get()->GetLogger(logid);
 
 	const samplog::LogLevel loglevel = static_cast<decltype(loglevel)>(params[2]);
 	if (!logger.IsLogLevel(loglevel))
 	{
-		PluginLog::Get()->LogNative(LogLevel::DEBUG, 
+		PluginLog::Get()->LogNative(LogLevel::DEBUG,
 			"log level not set, not logging message");
 		return 0;
 	}
@@ -124,15 +150,15 @@ AMX_DECLARE_NATIVE(Native::Log)
 		}
 
 		cell
-			*param_addr = nullptr,
-			&param = params[first_param_idx + param_counter++];
+			* param_addr = nullptr,
+			& param = const_cast<cell*>(params)[first_param_idx + param_counter++];
 
 		auto fmt_str = fmt::format("{{:{:c}}}", format_spec == 'i' ? 'd' : format_spec);
 		switch (format_spec)
 		{
 		case 's': // string
 			fmt::format_to(str_writer, fmt_str, amx_GetCppString(amx, param));
-			break; 
+			break;
 		case 'd': // decimal
 		case 'i': // custom decimal alias
 		case 'o': // octal
@@ -170,7 +196,7 @@ AMX_DECLARE_NATIVE(Native::Log)
 
 	// copy rest of format string
 	fmt::format_to(str_writer, "{:s}", format_str.substr(spec_offset));
-	
+
 	cell ret_val = logger.Log(loglevel, fmt::to_string(str_writer), amx) ? 1 : 0;
 	PluginLog::Get()->LogNative(LogLevel::DEBUG, "return value: '{}'", ret_val);
 	return ret_val;

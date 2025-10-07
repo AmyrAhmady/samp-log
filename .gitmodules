@@ -7,3 +7,6 @@
 [submodule "libs/cmake"]
 	path = libs/cmake
 	url = https://github.com/AmyrAhmady/samp-cmake-modules
+[submodule "libs/log-core"]
+	path = libs/log-core
+	url = https://github.com/AmyrAhmady/samp-log-core
